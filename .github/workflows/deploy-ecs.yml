@@ -1,13 +1,16 @@
 name: Deploy to ECS
 
 on:
-  push:
+  workflow_run:
+    workflows: ["Build and Push Image to ECR"]
+    types:
+      - completed
     branches:
       - main
 
 jobs:
   deploy:
-    if: "!startsWith(github.event.head_commit.message, 'Initial commit')"
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     environment: production
 
@@ -20,39 +23,44 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-          role-to-assume: ${{ env.AWS_ROLE_DEPLOY }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_ROLE_DEPLOY }}
 
       - name: Log in to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Register ECS Task Definition
+      - name: Render Amazon ECS task definition
         id: task-def
-        uses: aws-actions/amazon-ecs-register-task-definition@v2
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
-          family: ${{ env.ECS_TASK_DEFINITION }}
-          container-definitions: |
-            [
-              {
-                "name": "${{ github.event.repository.name }}",
-                "image": "${{ env.ECR_REGISTRY_URL }}:${{ github.sha }}",
-                "essential": true,
-                "memory": 512,
-                "cpu": 256,
-                "portMappings": [
-                  {
-                    "containerPort": 80,
-                    "hostPort": 80
-                  }
-                ]
-              }
-            ]
+          task-definition-arn: |
+            {
+              "family": "${{ vars.ECS_TASK_DEFINITION }}",
+              "containerDefinitions": [
+                {
+                  "name": "${{ github.event.repository.name }}",
+                  "image": "${{ vars.ECR_REPOSITORY_URL }}:${{ github.sha }}",
+                  "essential": true,
+                  "memory": 512,
+                  "cpu": 256,
+                  "portMappings": [
+                    {
+                      "containerPort": "80",
+                      "hostPort": "80"
+                    }
+                  ]
+                }
+              ]
+            }
+          # task-definition-family: ${{ vars.ECS_TASK_DEFINITION }}
+          # container-name: ${{ github.event.repository.name }}
+          # image: ${{ vars.ECR_REPOSITORY_URL }}:${{ github.sha }}
 
       - name: Deploy to ECS Service
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
-          cluster: ${{ env.ECS_CLUSTER }}
-          service: ${{ env.ECS_SERVICE }}
+          cluster: ${{ vars.ECS_CLUSTER }}
+          service: ${{ vars.ECS_SERVICE }}
           task-definition: ${{ steps.task-def.outputs.task-definition-arn }}
           wait-for-service-stability: true

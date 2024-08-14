@@ -1,4 +1,4 @@
-name: Docker Build and Push to ECR
+name: Build and Push Image to ECR
 
 on:
   push:
@@ -22,8 +22,8 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-          role-to-assume: ${{ env.AWS_BUILD_ROLE }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_BUILD_ROLE }}
 
       - name: Log in to Amazon ECR
         id: login-ecr
@@ -33,5 +33,7 @@ jobs:
         env:
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          docker build -t ${{ env.REPOSITORY_URL }}:$IMAGE_TAG .
-          docker push ${{ env.REPOSITORY_URL }}:$IMAGE_TAG
+          docker build -t ${{ vars.ECR_REPOSITORY_URL }}:$IMAGE_TAG .
+          docker build -t ${{ vars.ECR_REPOSITORY_URL }}:latest .
+          docker push ${{ vars.ECR_REPOSITORY_URL }}:$IMAGE_TAG
+          docker push ${{ vars.ECR_REPOSITORY_URL }}:latest
