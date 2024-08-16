@@ -4,6 +4,15 @@ on:
   push:
     branches:
       - main
+      - releases/**
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+    branches:
+      - main
+      - releases/**
 
 jobs:
   build-and-push:
@@ -24,6 +33,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ vars.AWS_REGION }}
           role-to-assume: ${{ vars.AWS_BUILD_ROLE }}
+          role-session-name: GitHubWorkflow
 
       - name: Log in to Amazon ECR
         id: login-ecr
