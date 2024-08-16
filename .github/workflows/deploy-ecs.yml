@@ -1,6 +1,21 @@
 name: Deploy to ECS
 
 on:
+  workflow_dispatch:
+    inputs:
+      image-tag:
+        type: string
+        description: Image Tag to deploy
+        required: true
+      environment:
+        type: choice
+        description: Which environment to run this on
+        required: true
+        default: development
+        options:
+          - development
+          - production
+      
   workflow_run:
     workflows: ["Build and Push Image to ECR"]
     types:
@@ -10,9 +25,9 @@ on:
 
 jobs:
   deploy:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-    environment: production
+    environment: ${{ github.event.inputs.environment }}
 
     steps:
       - name: Checkout code
@@ -24,43 +39,49 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ vars.AWS_REGION }}
-          role-to-assume: ${{ vars.AWS_ROLE_DEPLOY }}
+          role-to-assume: ${{ vars.AWS_ROLE_BUILD }}
 
       - name: Log in to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Download current task definition 
+        run: |
+          aws ecs describe-task-definition \
+          --task-definition ${{ vars.ECS_TASK_DEFINITION }} \
+          --query taskDefinition > task-definition-${{ vars.ECS_TASK_DEFINITION }}.json
+      - name: Download current task definition 
+        run: |
+          aws ecs describe-task-definition \
+          --task-definition ${{ vars.ECS_TASK_DEFINITION }} \
+          --query taskDefinition > task-definition-${{ vars.ECS_TASK_DEFINITION }}.json
       - name: Render Amazon ECS task definition
         id: task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
+        env:
+          IMAGE_TAG: ${{ github.event.inputs.image-tag || github.sha }}
         with:
-          task-definition-arn: |
-            {
-              "family": "${{ vars.ECS_TASK_DEFINITION }}",
-              "containerDefinitions": [
-                {
-                  "name": "${{ github.event.repository.name }}",
-                  "image": "${{ vars.ECR_REPOSITORY_URL }}:${{ github.sha }}",
-                  "essential": true,
-                  "memory": 512,
-                  "cpu": 256,
-                  "portMappings": [
-                    {
-                      "containerPort": "80",
-                      "hostPort": "80"
-                    }
-                  ]
-                }
-              ]
-            }
-          # task-definition-family: ${{ vars.ECS_TASK_DEFINITION }}
-          # container-name: ${{ github.event.repository.name }}
-          # image: ${{ vars.ECR_REPOSITORY_URL }}:${{ github.sha }}
+          task-definition: task-definition-${{ vars.ECS_TASK_DEFINITION }}.json
+          task-definition-family: ${{ vars.ECS_TASK_DEFINITION }}
+          task-definition-arn: ${{ vars.AWS_ROLE_DEPLOY }}
+          container-name: ${{ github.event.repository.name }}
+          image: 786243266451.dkr.ecr.us-east-1.amazonaws.com/ecr-ms-family-budget:${{ env.IMAGE_TAG }}
 
       - name: Deploy to ECS Service
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           cluster: ${{ vars.ECS_CLUSTER }}
           service: ${{ vars.ECS_SERVICE }}
-          task-definition: ${{ steps.task-def.outputs.task-definition-arn }}
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
           wait-for-service-stability: true
+
+      - name: Download new task definition 
+        run: |
+          aws ecs describe-task-definition \
+          --task-definition ${{ vars.ECS_TASK_DEFINITION }} \
+          --query taskDefinition > task-definition-${{ vars.ECS_TASK_DEFINITION }}-new.json
+      - name: Upload task definition
+        uses: actions/upload-artifact@v4
+        with:
+          name: task-definition
+          path: task-definition-**.json
