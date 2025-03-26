@@ -1,1 +1,2 @@
-fastapi[standard]>=0.112.0,<1.0.0
+fastapi[standard]>=0.115.0,<1.0.0
+boto3>=1.37.0,<2.0.0

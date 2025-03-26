@@ -4,26 +4,18 @@ on:
   push:
     branches:
       - main
-      - releases/**
-  pull_request:
-    types:
-      - opened
-      - synchronize
-      - reopened
-    branches:
-      - main
-      - releases/**
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
 
 jobs:
   build-and-push:
-    if: "!startsWith(github.event.head_commit.message, 'Initial commit')"
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
+      - name: Set up docker buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Configure AWS credentials
@@ -35,15 +27,22 @@ jobs:
           role-to-assume: ${{ vars.AWS_BUILD_ROLE }}
           role-session-name: GitHubWorkflow
 
-      - name: Log in to Amazon ECR
+      - name: Login ecr
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build, tag, and push Docker image
-        env:
-          IMAGE_TAG: ${{ github.sha }}
+      - name: Set image tag
+        id: set-image-tag
         run: |
-          docker build -t ${{ vars.ECR_REPOSITORY_URL }}:$IMAGE_TAG .
-          docker build -t ${{ vars.ECR_REPOSITORY_URL }}:latest .
-          docker push ${{ vars.ECR_REPOSITORY_URL }}:$IMAGE_TAG
-          docker push ${{ vars.ECR_REPOSITORY_URL }}:latest
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "IMAGE_TAG=${GITHUB_REF_NAME}" >> $GITHUB_ENV
+          else
+            echo "IMAGE_TAG=${GITHUB_SHA}" >> $GITHUB_ENV
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          push: true
+          tags: |
+            ${{ vars.ECR_REPOSITORY_URL }}:${{ env.IMAGE_TAG }}
+            ${{ vars.ECR_REPOSITORY_URL }}:latest

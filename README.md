@@ -1,3 +1,3 @@
 # FastAPI Application
 
-FastAPI application running on AWS ECS
+FastAPI application running on AWS EKS
