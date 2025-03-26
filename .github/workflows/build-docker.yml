@@ -6,6 +6,7 @@ on:
       - main
     tags:
       - "[0-9]+.[0-9]+.[0-9]+"
+  workflow_dispatch:
 
 jobs:
   build-and-push:
@@ -44,5 +45,5 @@ jobs:
         with:
           push: true
           tags: |
-            ${{ vars.ECR_REPOSITORY_URL }}:${{ env.IMAGE_TAG }}
-            ${{ vars.ECR_REPOSITORY_URL }}:latest
+            ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com/${{ vars.AWS_ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+            ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ vars.AWS_REGION }}.amazonaws.com/${{ vars.AWS_ECR_REPOSITORY }}:latest
