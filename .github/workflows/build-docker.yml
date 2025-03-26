@@ -28,7 +28,7 @@ jobs:
       - name: Set up docker buildx
         uses: docker/setup-buildx-action@v3
         with:
-          platform: linux/amd64
+          platforms: linux/amd64
 
       - name: Login ecr
         id: login-ecr
